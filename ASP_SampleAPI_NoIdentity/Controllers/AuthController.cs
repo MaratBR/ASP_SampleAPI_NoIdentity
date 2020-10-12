@@ -11,8 +11,6 @@ using ASP_SampleAPI_NoIdentity.Config;
 using ASP_SampleAPI_NoIdentity.Models;
 using CryptSharp;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,30 +22,11 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
     [ApiController]
     public class AuthController : DbController
     {
-        private IConfiguration _configuration;
+        private readonly IConfiguration configuration;
 
         public AuthController(AppDbContext context, IConfiguration configuration) : base(context)
         {
-            _configuration = configuration;
-        }
-
-        public class RegisterRequest
-        {
-            [Required]
-            public string Username { get; set; }
-
-            [Required]
-            public string Email { get; set; }
-
-            [Required]
-            public string Password { get; set; }
-        }
-
-        public class RegisterResponse
-        {
-            public string Error { get; set; }
-
-            public bool Success => Error == null;
+            this.configuration = configuration;
         }
 
         [HttpPost("register")]
@@ -63,24 +42,20 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
                 .FirstOrDefaultAsync();
 
             if (user != null)
-            {
                 return new RegisterResponse
                 {
                     Error = "Username was already taken"
                 };
-            }
 
             user = await DbContext.Users
                 .Where(u => u.EmailNormalized == emailNorm)
                 .FirstOrDefaultAsync();
 
             if (user != null)
-            {
                 return new RegisterResponse
                 {
                     Error = "Email was already taken"
                 };
-            }
 
             user = new User
             {
@@ -88,32 +63,14 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
                 UsernameNormalized = usernameNorm,
                 Email = request.Email,
                 EmailNormalized = emailNorm,
-                PasswordHash = BlowfishCrypter.Blowfish.Crypt(
-                    Encoding.UTF8.GetBytes(request.Password), 
-                    BlowfishCrypter.Blowfish.GenerateSalt())
+                PasswordHash = Crypter.Blowfish.Crypt(
+                    Encoding.UTF8.GetBytes(request.Password),
+                    Crypter.Blowfish.GenerateSalt())
             };
 
             DbContext.Add(user);
             await DbContext.SaveChangesAsync();
             return new RegisterResponse();
-        }
-
-        public class LoginRequest
-        {
-            public string Login { get; set; }
-
-            public string Password { get; set; }
-        }
-
-        public class LoginResponse
-        {
-            public string RefreshToken { get; set; }
-
-            public DateTime? RefreshTokenExpiration { get; set; }
-
-            public string Token { get; set; }
-
-            public DateTime TokenExpiration { get; set; }
         }
 
         [HttpPost("login")]
@@ -122,13 +79,12 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
             request.Login = request.Login.Trim();
             var loginNorm = request.Login.ToLowerInvariant();
             var user = DbContext.Users
-                .Where(u => u.EmailNormalized == loginNorm || u.UsernameNormalized == loginNorm)
-                .FirstOrDefault();
+                .FirstOrDefault(u => u.EmailNormalized == loginNorm || u.UsernameNormalized == loginNorm);
 
             if (user == null)
                 return NotFound("User not found");
 
-            if (!BlowfishCrypter.CheckPassword(request.Password, user.PasswordHash))
+            if (!Crypter.CheckPassword(request.Password, user.PasswordHash))
                 return NotFound("User not found");
 
             var (refresh, refreshExp) = await CreateRefreshToken(user);
@@ -146,17 +102,10 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
         [HttpGet("claims")]
         public ActionResult<object> GetClaims()
         {
-            return new {
-                claims = HttpContext.User.Claims.Select(c => new { c.Type, c.Value })
+            return new
+            {
+                claims = HttpContext.User.Claims.Select(c => new {c.Type, c.Value})
             };
-        }
-
-        public class RefreshTokenRequest
-        {
-            public string RefreshToken { get; set; }
-
-            public bool RenewRefreshToken { get; set; }
-
         }
 
         [HttpPost("refresh")]
@@ -192,10 +141,9 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
 
         private async Task<(string, DateTime)> CreateRefreshToken(User user, bool autoSave = true)
         {
-
             var p = new RNGCryptoServiceProvider();
-            var exp = DateTime.UtcNow.Add(_configuration.GetJwtSettings().RefreshTokenLifetime);
-            
+            var exp = DateTime.UtcNow.Add(configuration.GetJwtSettings().RefreshTokenLifetime);
+
             var token = new RefreshToken
             {
                 Id = RefreshToken.GenerateId(),
@@ -214,15 +162,15 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
 
         private (string, DateTime) CreateAccessToken(User user)
         {
-            var settings = _configuration.GetJwtSettings();
+            var settings = configuration.GetJwtSettings();
             var keyBytes = Encoding.UTF8.GetBytes(settings.Secret);
             var secret = settings.GetSigningKey();
             var exp = DateTime.UtcNow.Add(settings.TokenLifetime);
 
             var token = new JwtSecurityToken(
-                issuer: settings.Issuer,
-                audience: settings.Audience,
-                claims: new List<Claim>
+                settings.Issuer,
+                settings.Audience,
+                new List<Claim>
                 {
                     new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                     new Claim("role", user.Role ?? string.Empty),
@@ -230,7 +178,7 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
                 },
                 expires: exp,
                 signingCredentials: new SigningCredentials(secret, SecurityAlgorithms.HmacSha256)
-                );
+            );
             var tokenHandler = new JwtSecurityTokenHandler();
 
             return (tokenHandler.WriteToken(token), exp);
@@ -244,6 +192,47 @@ namespace ASP_SampleAPI_NoIdentity.Controllers
             var bytes = Encoding.UTF8.GetBytes(userAgent);
             var hash = SHA256.Create().ComputeHash(bytes);
             return Convert.ToBase64String(hash);
+        }
+
+        public class RegisterRequest
+        {
+            [Required] public string Username { get; set; }
+
+            [Required] public string Email { get; set; }
+
+            [Required] public string Password { get; set; }
+        }
+
+        public class RegisterResponse
+        {
+            public string Error { get; set; }
+
+            public bool Success => Error == null;
+        }
+
+        public class LoginRequest
+        {
+            public string Login { get; set; }
+
+            public string Password { get; set; }
+        }
+
+        public class LoginResponse
+        {
+            public string RefreshToken { get; set; }
+
+            public DateTime? RefreshTokenExpiration { get; set; }
+
+            public string Token { get; set; }
+
+            public DateTime TokenExpiration { get; set; }
+        }
+
+        public class RefreshTokenRequest
+        {
+            public string RefreshToken { get; set; }
+
+            public bool RenewRefreshToken { get; set; }
         }
     }
 }

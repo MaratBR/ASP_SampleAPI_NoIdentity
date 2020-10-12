@@ -1,8 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace ASP_SampleAPI_NoIdentity.Models
 {
@@ -12,6 +8,7 @@ namespace ASP_SampleAPI_NoIdentity.Models
         {
             Database.EnsureCreated();
         }
+
         public DbSet<User> Users { get; set; }
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }

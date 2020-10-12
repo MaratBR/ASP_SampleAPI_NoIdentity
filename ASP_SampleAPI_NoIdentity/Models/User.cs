@@ -1,9 +1,6 @@
-﻿using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace ASP_SampleAPI_NoIdentity.Models
 {
@@ -19,15 +16,12 @@ namespace ASP_SampleAPI_NoIdentity.Models
 
         public string EmailNormalized { get; set; }
 
-        [JsonIgnore]
-        public string PasswordHash { get; set; }
+        [JsonIgnore] public string PasswordHash { get; set; }
 
         public string Role { get; set; }
 
         public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 
-        [Timestamp]
-        [ConcurrencyCheck]
-        public byte[] ConsurrencyToken { get; set; }
+        [Timestamp] [ConcurrencyCheck] public byte[] ConsurrencyToken { get; set; }
     }
 }

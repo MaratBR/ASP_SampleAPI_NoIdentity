@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Buffers.Text;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
-using System.Threading.Tasks;
 
 namespace ASP_SampleAPI_NoIdentity.Models
 {
@@ -25,7 +21,7 @@ namespace ASP_SampleAPI_NoIdentity.Models
 
         public static string GenerateId()
         {
-            byte[] id = new byte[32];
+            var id = new byte[32];
             var provider = new RNGCryptoServiceProvider();
             provider.GetBytes(id);
             return Convert.ToBase64String(id);
